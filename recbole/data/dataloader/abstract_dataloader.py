@@ -152,6 +152,7 @@ class NegSampleDataLoader(AbstractDataLoader):
                 )
             elif self.dl_format == InputType.PAIRWISE:
                 self.times = self.neg_sample_num
+                
                 self.sampling_func = self._neg_sample_by_pair_wise_sampling
 
                 self.neg_prefix = config["NEG_PREFIX"]
@@ -169,7 +170,36 @@ class NegSampleDataLoader(AbstractDataLoader):
                 raise ValueError(
                     f"`neg sampling by` with dl_format [{self.dl_format}] not been implemented."
                 )
+        if (
+            self.neg_sample_args["distribution"] == "user_custom"
+            and self.neg_sample_args["sample_num"] != "none"
+        ):
+            self.neg_sample_num = self.neg_sample_args["sample_num"]
 
+            if self.dl_format == InputType.POINTWISE:
+                self.times = 1 + self.neg_sample_num
+                self.sampling_func = self._neg_sample_by_point_wise_sampling
+
+                self.label_field = config["LABEL_FIELD"]
+                dataset.set_field_property(
+                    self.label_field, FeatureType.FLOAT, FeatureSource.INTERACTION, 1
+                )
+            elif self.dl_format == InputType.PAIRWISE:
+                self.times = self.neg_sample_num
+                
+                self.sampling_func = self._user_custom_sampling
+        
+                self.neg_prefix = config["NEG_PREFIX"]
+                self.neg_item_id = self.neg_prefix + self.iid_field
+
+                columns = (
+                    [self.iid_field]
+                    if dataset.item_feat is None
+                    else dataset.item_feat.columns
+                )
+                for item_feat_col in columns:
+                    neg_item_feat_col = self.neg_prefix + item_feat_col
+                    dataset.copy_field_property(neg_item_feat_col, item_feat_col) 
         elif (
             self.neg_sample_args["distribution"] != "none"
             and self.neg_sample_args["sample_num"] != "none"
@@ -211,6 +241,7 @@ class NegSampleDataLoader(AbstractDataLoader):
                 user_ids, item_ids, self.neg_sample_num
             )
             return self.sampling_func(inter_feat, neg_item_ids)
+        
         else:
             return inter_feat
 
@@ -231,6 +262,13 @@ class NegSampleDataLoader(AbstractDataLoader):
         labels[:pos_inter_num] = 1.0
         new_data.update(Interaction({self.label_field: labels}))
         return new_data
+    def _user_custom_sampling(self, inter_feat, neg_item_ids):
+        inter_feat = inter_feat.repeat(self.times)
+        neg_item_feat = Interaction({self.iid_field: neg_item_ids})
+        neg_item_feat = self._dataset.join(neg_item_feat)
+        neg_item_feat.add_prefix(self.neg_prefix)
+        inter_feat.update(neg_item_feat)
+        return inter_feat
 
     def get_model(self, model):
         self.model = model

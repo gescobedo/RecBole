@@ -307,24 +307,28 @@ def _create_sampler(
 ):
     phases = ["train", "valid", "test"]
     sampler = None
+     
     if distribution != "none":
-        if base_sampler is not None:
-            base_sampler.set_distribution(distribution)
-            return base_sampler
-        if not repeatable:
-            sampler = Sampler(
-                phases,
-                built_datasets,
-                distribution,
-                alpha,
-            )
+        if distribution == "user_custom":
+        sampler =  
         else:
-            sampler = RepeatableSampler(
-                phases,
-                dataset,
-                distribution,
-                alpha,
-            )
+            if base_sampler is not None:
+                base_sampler.set_distribution(distribution)
+                return base_sampler
+            if not repeatable:
+                sampler = Sampler(
+                    phases,
+                    built_datasets,
+                    distribution,
+                    alpha,
+                )
+            else:
+                sampler = RepeatableSampler(
+                    phases,
+                    dataset,
+                    distribution,
+                    alpha,
+                )
     return sampler
 
 
