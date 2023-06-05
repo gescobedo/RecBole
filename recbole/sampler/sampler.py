@@ -299,6 +299,8 @@ class Sampler(AbstractSampler):
             for user_id in user_ids:
                 if user_id < 0 or user_id >= self.user_num:
                     raise ValueError(f"user_id [{user_id}] not exist.")
+
+
 class UserDiscoverySampler(AbstractSampler):
     """:class:`Sampler` is used to sample negative items for each input user. In order to avoid positive items
     in train-phase to be sampled in valid-phase, and positive items in train-phase or valid-phase to be sampled
@@ -360,22 +362,8 @@ class UserDiscoverySampler(AbstractSampler):
             value_id[len(key_ids) * (num - 1) + 1] is sampled for key_ids[1]; ...; and so on.
         """
         
-        user_neg_samples = self.user_feat['neg_samples']
-
-        valid_user = self.datasets[0].id2token(self.uid_field,list(range(self.user_num)))[1:]
-        valid_items = self.datasets[0].id2token(self.iid_field,list(range(self.item_num)))[1:]
         
-        dict_valid_user ={token:id_ for token,id_ in zip(valid_user,np.arange(1,len(valid_user)))}
-        dict_valid_items ={token:id_ for token,id_ in zip(valid_items,np.arange(1,len(valid_items)))}
-        if self.user_neg_samples is None:
-            user_neg_samples = self.user_feat['p_user_pool'].dropna()
-            user_neg_samples= {str(k):v for k,v in user_neg_samples.items() if dict_valid_user.get(str(k))!=None}
-            user_neg_samples_id= {
-            train_data._dataset.token2id(train_data._dataset.uid_field, [str(k)])[-1]:
-            train_data._dataset.token2id(train_data._dataset.iid_field, 
-                                    [str(y) for y in v if dict_valid_items.get(str(y))!=None]) 
-                                    for k,v in user_neg_samples.items()}
-        N_NEG_SAMPLES =1
+        
         # Implement custom pools 
         key_ids = np.array(key_ids)
         key_num = len(key_ids)
@@ -414,6 +402,18 @@ class UserDiscoverySampler(AbstractSampler):
             dict: Used item_ids is the same as positive item_ids.
             Key is phase, and value is a numpy.ndarray which index is user_id, and element is a set of item_ids.
         """
+
+        
+        if self.user_neg_samples is None:
+            valid_user = self.datasets[0].id2token(self.uid_field,list(range(self.user_num)))[1:]
+            valid_items = self.datasets[0].id2token(self.iid_field,list(range(self.item_num)))[1:]
+
+            dict_valid_user ={token:id_ for token,id_ in zip(valid_user,np.arange(1,len(valid_user)))}
+            dict_valid_items ={token:id_ for token,id_ in zip(valid_items,np.arange(1,len(valid_items)))}
+            user_neg_samples_feat ={user_id:row.split(" ") for user_id, row self.user_feat['user_item_pool'].dropna().iterrows()}
+            self.user_neg_samples= {k:self.datasets[0].token2id(self.datasets[0].iid_field, 
+                                    [y for y in v if dict_valid_items.get(y)!=None]) 
+                                    for k,v in user_neg_samples_feat.items()}
         used_item_id = dict()
         last = [set() for _ in range(self.user_num)]
         for phase, dataset in zip(self.phases, self.datasets):
