@@ -20,7 +20,7 @@ import warnings
 from typing import Literal
 
 from recbole.data.dataloader import *
-from recbole.sampler import KGSampler, Sampler, RepeatableSampler
+from recbole.sampler import KGSampler, Sampler, RepeatableSampler, UserDiscoverySampler
 from recbole.utils import ModelType, ensure_dir, get_local_time, set_color
 from recbole.utils.argument_list import dataset_arguments
 
@@ -310,7 +310,12 @@ def _create_sampler(
      
     if distribution != "none":
         if distribution == "user_custom":
-        sampler =  
+            sampler = UserDiscoverySampler(
+                phases,
+                built_datasets,
+                distribution,
+                alpha,
+            )
         else:
             if base_sampler is not None:
                 base_sampler.set_distribution(distribution)

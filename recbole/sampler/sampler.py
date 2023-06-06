@@ -316,7 +316,7 @@ class UserDiscoverySampler(AbstractSampler):
         phase (str): the phase of sampler. It will not be set until :meth:`set_phase` is called.
     """
 
-    def __init__(self, phases, datasets, distribution="uniform", alpha=1.0):
+    def __init__(self, phases, datasets, distribution="uniform", alpha=1.0, udist_field='p60'):
         if not isinstance(phases, list):
             phases = [phases]
         if not isinstance(datasets, list):
@@ -334,7 +334,7 @@ class UserDiscoverySampler(AbstractSampler):
 
         self.user_num = datasets[0].user_num
         self.item_num = datasets[0].item_num
-        self.user_feat = dataset.user_feat
+        self.user_feat = datasets[0].user_feat
         self.user_neg_samples = None
         super().__init__(distribution=distribution, alpha=alpha)
 
@@ -410,7 +410,7 @@ class UserDiscoverySampler(AbstractSampler):
 
             dict_valid_user ={token:id_ for token,id_ in zip(valid_user,np.arange(1,len(valid_user)))}
             dict_valid_items ={token:id_ for token,id_ in zip(valid_items,np.arange(1,len(valid_items)))}
-            user_neg_samples_feat ={user_id:row.split(" ") for user_id, row self.user_feat['user_item_pool'].dropna().iterrows()}
+            user_neg_samples_feat ={user_id:row.split(" ") for user_id, row in self.user_feat['user_item_pool'].dropna().iterrows()}
             self.user_neg_samples= {k:self.datasets[0].token2id(self.datasets[0].iid_field, 
                                     [y for y in v if dict_valid_items.get(y)!=None]) 
                                     for k,v in user_neg_samples_feat.items()}
