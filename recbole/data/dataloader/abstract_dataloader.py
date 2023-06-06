@@ -170,7 +170,7 @@ class NegSampleDataLoader(AbstractDataLoader):
                 raise ValueError(
                     f"`neg sampling by` with dl_format [{self.dl_format}] not been implemented."
                 )
-        if (
+        elif (
             self.neg_sample_args["distribution"] == "user_custom"
             and self.neg_sample_args["sample_num"] != "none"
         ):
