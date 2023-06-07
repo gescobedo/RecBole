@@ -306,36 +306,51 @@ def _create_sampler(
     base_sampler=None,
 ):
     phases = ["train", "valid", "test"]
-    sampler = None
-     
+    sampler = None   
     if distribution != "none":
-        if distribution == "user_custom":
-            sampler = UserDiscoverySampler(
+        if base_sampler is not None:
+                base_sampler.set_distribution(distribution)
+                return base_sampler
+        if not repeatable:
+            sampler = Sampler(
                 phases,
                 built_datasets,
                 distribution,
                 alpha,
             )
         else:
-            if base_sampler is not None:
-                base_sampler.set_distribution(distribution)
-                return base_sampler
-            if not repeatable:
-                sampler = Sampler(
-                    phases,
-                    built_datasets,
-                    distribution,
-                    alpha,
-                )
-            else:
-                sampler = RepeatableSampler(
-                    phases,
-                    dataset,
-                    distribution,
-                    alpha,
-                )
+            sampler = RepeatableSampler(
+                phases,
+                dataset,
+                distribution,
+                alpha,
+            )
     return sampler
 
+def _create_custom_sampler(
+    dataset,
+    config,
+    built_datasets,
+    distribution: str,
+    repeatable: bool,
+    alpha: float = 1.0,
+    base_sampler=None,
+    
+):
+    phases = ["train", "valid", "test"]
+    sampler = None 
+    if distribution == "user_custom":
+            user_pools_url = os.path.join(config["data_path"],f'{config["dataset"]}.user_pool')
+            user_pools = pickle.load(open(user_pools_url,mode='rb'))
+
+            sampler = UserDiscoverySampler(
+                phases,
+                built_datasets,
+                distribution,
+                alpha,
+                user_pools
+            )
+    return sampler
 
 def create_samplers(config, dataset, built_datasets):
     """Create sampler for training, validation and testing.
@@ -356,30 +371,63 @@ def create_samplers(config, dataset, built_datasets):
     valid_neg_sample_args = config["valid_neg_sample_args"]
     test_neg_sample_args = config["test_neg_sample_args"]
     repeatable = config["repeatable"]
-    base_sampler = _create_sampler(
-        dataset,
-        built_datasets,
-        train_neg_sample_args["distribution"],
-        repeatable,
-        train_neg_sample_args["alpha"],
-    )
-    train_sampler = base_sampler.set_phase("train") if base_sampler else None
+    if train_neg_sample_args['distribution'] == "user_custom":
+        base_sampler = _create_custom_sampler(
+            dataset,
+            config,
+            built_datasets,
+            train_neg_sample_args["distribution"],
+            repeatable,
+            train_neg_sample_args["alpha"],
+            config,
+        )
+        train_sampler = base_sampler.set_phase("train") if base_sampler else None
 
-    valid_sampler = _create_sampler(
-        dataset,
-        built_datasets,
-        valid_neg_sample_args["distribution"],
-        repeatable,
-        base_sampler=base_sampler,
-    )
-    valid_sampler = valid_sampler.set_phase("valid") if valid_sampler else None
+        valid_sampler = _create_custom_sampler(
+            dataset,
+            config,
+            built_datasets,
+            valid_neg_sample_args["distribution"],
+            repeatable,
+            base_sampler=base_sampler,
+        )
+        valid_sampler = valid_sampler.set_phase("valid") if valid_sampler else None
 
-    test_sampler = _create_sampler(
-        dataset,
-        built_datasets,
-        test_neg_sample_args["distribution"],
-        repeatable,
-        base_sampler=base_sampler,
-    )
-    test_sampler = test_sampler.set_phase("test") if test_sampler else None
+        test_sampler = _create_custom_sampler(
+            dataset,
+            config,
+            built_datasets,
+            test_neg_sample_args["distribution"],
+            repeatable,
+            base_sampler=base_sampler,
+        )
+        test_sampler = test_sampler.set_phase("test") if test_sampler else None
+        
+    else :
+        base_sampler = _create_custom_sampler(
+            dataset,
+            built_datasets,
+            train_neg_sample_args["distribution"],
+            repeatable,
+            train_neg_sample_args["alpha"],
+        )
+        train_sampler = base_sampler.set_phase("train") if base_sampler else None
+
+        valid_sampler = _create_sampler(
+            dataset,
+            built_datasets,
+            valid_neg_sample_args["distribution"],
+            repeatable,
+            base_sampler=base_sampler,
+        )
+        valid_sampler = valid_sampler.set_phase("valid") if valid_sampler else None
+
+        test_sampler = _create_sampler(
+            dataset,
+            built_datasets,
+            test_neg_sample_args["distribution"],
+            repeatable,
+            base_sampler=base_sampler,
+        )
+        test_sampler = test_sampler.set_phase("test") if test_sampler else None
     return train_sampler, valid_sampler, test_sampler

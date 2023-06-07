@@ -764,3 +764,80 @@ class TailPercentage(AbstractMetric):
             key = "{}@{}".format(metric, k)
             metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
         return metric_dict
+
+
+class Novelty(AbstractMetric):
+    r"""Novelty_ 
+    .. math::
+        \mathrm {TailPercentage@K}=\frac{1}{|U|} \sum_{u \in U} \frac{\sum_{i \in R_{u}} {\delta(i \in T)}}{|R_{u}|}
+
+    :math:`\delta(·)` is an indicator function.
+    :math:`T` is the set of long-tail items,
+    which is a portion of items that appear in training data seldomly.
+
+    Note:
+        If you want to use this metric, please set the parameter 'tail_ratio' in the config
+        which can be an integer or a float in (0,1]. Otherwise it will default to 0.1.
+    """
+    metric_type = EvaluatorType.RANKING
+    metric_need = ["rec.items", "data.count_items"]
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.topk = config["topk"]
+
+    def used_info(self, dataobject):
+        """Get the matrix of recommendation items and number of items in total item set."""
+        item_matrix = dataobject.get("rec.items")
+        count_items = dataobject.get("data.count_items")
+        return item_matrix.numpy(), dict(count_items)
+
+    def get_popularity(self, item_matrix, count_items):
+        """Get long-tail percentage through the top-k recommendation list.
+
+        Args:
+            item_matrix(numpy.ndarray): matrix of items recommended to users.
+            count_items(dict): the number of interaction of items in training data.
+
+        Returns:
+            float: long-tail percentage.
+        """
+        if self.tail > 1:
+            tail_items = [item for item, cnt in count_items.items() if cnt <= self.tail]
+        else:
+            count_items = sorted(count_items.items(), key=lambda kv: (kv[1], kv[0]))
+            cut = max(int(len(count_items) * self.tail), 1)
+            count_items = count_items[:cut]
+            tail_items = [item for item, cnt in count_items]
+        value = np.zeros_like(item_matrix)
+        for i in range(item_matrix.shape[0]):
+            row = item_matrix[i, :]
+            for j in range(row.shape[0]):
+                value[i][j] = 1 if row[j] in tail_items else 0
+        return value
+
+    def calculate_metric(self, dataobject):
+        item_matrix, count_items = self.used_info(dataobject)
+        result = self.metric_info(self.get_tail(item_matrix, count_items))
+        metric_dict = self.topk_result("tailpercentage", result)
+        return metric_dict
+
+    def metric_info(self, values):
+        return values.cumsum(axis=1) / np.arange(1, values.shape[1] + 1)
+
+    def topk_result(self, metric, value):
+        """Match the metric value to the `k` and put them in `dictionary` form.
+
+        Args:
+            metric(str): the name of calculated metric.
+            value(numpy.ndarray): metrics for each user, including values from `metric@1` to `metric@max(self.topk)`.
+
+        Returns:
+            dict: metric values required in the configuration.
+        """
+        metric_dict = {}
+        avg_result = value.mean(axis=0)
+        for k in self.topk:
+            key = "{}@{}".format(metric, k)
+            metric_dict[key] = round(avg_result[k - 1], self.decimal_place)
+        return metric_dict

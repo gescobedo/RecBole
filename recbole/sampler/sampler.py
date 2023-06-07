@@ -132,6 +132,8 @@ class AbstractSampler(object):
             return self._uni_sampling(sample_num)
         elif self.distribution == "popularity":
             return self._pop_sampling(sample_num)
+        elif self.distribution == "user_custom":
+            return self._uni_sampling(sample_num)
         else:
             raise NotImplementedError(
                 f"The sampling distribution [{self.distribution}] is not implemented."
@@ -316,7 +318,7 @@ class UserDiscoverySampler(AbstractSampler):
         phase (str): the phase of sampler. It will not be set until :meth:`set_phase` is called.
     """
 
-    def __init__(self, phases, datasets, distribution="uniform", alpha=1.0, udist_field='p60'):
+    def __init__(self, phases, datasets, distribution="uniform", alpha=1.0, user_pools={} ,udist_field='p60'):
         if not isinstance(phases, list):
             phases = [phases]
         if not isinstance(datasets, list):
@@ -325,10 +327,10 @@ class UserDiscoverySampler(AbstractSampler):
             raise ValueError(
                 f"Phases {phases} and datasets {datasets} should have the same length."
             )
-
+    
         self.phases = phases
         self.datasets = datasets
-
+        
         self.uid_field = datasets[0].uid_field
         self.iid_field = datasets[0].iid_field
 
@@ -336,6 +338,7 @@ class UserDiscoverySampler(AbstractSampler):
         self.item_num = datasets[0].item_num
         self.user_feat = datasets[0].user_feat
         self.user_neg_samples = None
+        self.user_pools=user_pools
         super().__init__(distribution=distribution, alpha=alpha)
 
     def _get_candidates_list(self):
@@ -405,15 +408,20 @@ class UserDiscoverySampler(AbstractSampler):
 
         
         if self.user_neg_samples is None:
-            valid_user = self.datasets[0].id2token(self.uid_field,list(range(self.user_num)))[1:]
-            valid_items = self.datasets[0].id2token(self.iid_field,list(range(self.item_num)))[1:]
+            valid_user = self.datasets[0].id2token(self.datasets[0].uid_field,list(range(self.datasets[0].user_num)))[1:]
+            valid_items = self.datasets[0].id2token(self.datasets[0].iid_field,list(range(self.datasets[0].item_num)))[1:]
 
             dict_valid_user ={token:id_ for token,id_ in zip(valid_user,np.arange(1,len(valid_user)))}
             dict_valid_items ={token:id_ for token,id_ in zip(valid_items,np.arange(1,len(valid_items)))}
-            user_neg_samples_feat ={user_id:row.split(" ") for user_id, row in self.user_feat['user_item_pool'].dropna().iterrows()}
-            self.user_neg_samples= {k:self.datasets[0].token2id(self.datasets[0].iid_field, 
-                                    [y for y in v if dict_valid_items.get(y)!=None]) 
-                                    for k,v in user_neg_samples_feat.items()}
+            
+       
+            user_neg_samples_feat ={
+                self.datasets[0].token2id(self.datasets[0].uid_field,user_id):row for user_id, row in self.user_pools.items() if dict_valid_user.get(user_id)!=None}
+
+            self.user_neg_samples = {k:list(self.datasets[0].token2id(self.datasets[0].iid_field, 
+                                                [y for y in v if dict_valid_items.get(y)!=None])) 
+                                                for k,v in user_neg_samples_feat.items()}
+            
         used_item_id = dict()
         last = [set() for _ in range(self.user_num)]
         for phase, dataset in zip(self.phases, self.datasets):
@@ -423,6 +431,9 @@ class UserDiscoverySampler(AbstractSampler):
                 dataset.inter_feat[self.iid_field].numpy(),
             ):
                 cur[uid].add(iid)
+            # Remove items to be sampled
+            for uid,values in enumerate(cur):
+                cur[uid]-=set(self.user_neg_samples.get(uid,[]))
             last = used_item_id[phase] = cur
 
         for used_item_set in used_item_id[self.phases[-1]]:

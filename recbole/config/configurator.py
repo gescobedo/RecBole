@@ -539,7 +539,7 @@ class Config(object):
                     "dynamic": False,
                     "candidate_num": 0,
                 }
-            elif distribution not in ["uniform", "popularity"]:
+            elif distribution not in ["uniform", "popularity", "user_custom"]:
                 raise ValueError(
                     f"The distribution [{distribution}] of train_neg_sample_args "
                     f"should in ['uniform', 'popularity']"
