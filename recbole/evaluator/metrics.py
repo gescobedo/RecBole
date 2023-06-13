@@ -767,19 +767,14 @@ class TailPercentage(AbstractMetric):
 
 
 class Novelty(AbstractMetric):
-    r"""Novelty_ 
+    r"""Novelty metric based on https://doi.org/10.1007/s13735-018-0154-2
+
     .. math::
-        \mathrm {TailPercentage@K}=\frac{1}{|U|} \sum_{u \in U} \frac{\sum_{i \in R_{u}} {\delta(i \in T)}}{|R_{u}|}
-
-    :math:`\delta(·)` is an indicator function.
-    :math:`T` is the set of long-tail items,
-    which is a portion of items that appear in training data seldomly.
-
-    Note:
-        If you want to use this metric, please set the parameter 'tail_ratio' in the config
-        which can be an integer or a float in (0,1]. Otherwise it will default to 0.1.
+        \mathrm{Novelty@K}=\frac{1}{|U|} \sum_{u \in U } \sum_{i \in R_{u}}\frac{\log_2(pop_i)}{N}
+    
     """
     metric_type = EvaluatorType.RANKING
+    smaller = True
     metric_need = ["rec.items", "data.count_items"]
 
     def __init__(self, config):
@@ -787,46 +782,40 @@ class Novelty(AbstractMetric):
         self.topk = config["topk"]
 
     def used_info(self, dataobject):
-        """Get the matrix of recommendation items and number of items in total item set."""
+        """Get the matrix of recommendation items and the popularity of items in training data"""
+        item_counter = dataobject.get("data.count_items")
+        num_users = dataobject.get("data.num_users")
         item_matrix = dataobject.get("rec.items")
-        count_items = dataobject.get("data.count_items")
-        return item_matrix.numpy(), dict(count_items)
+        return item_matrix.numpy(), dict(item_counter), num_users
 
-    def get_popularity(self, item_matrix, count_items):
-        """Get long-tail percentage through the top-k recommendation list.
+    def calculate_metric(self, dataobject):
+        item_matrix, item_count, num_users= self.used_info(dataobject)
+        result = self.metric_info(self.get_pop(item_matrix, item_count,num_users),num_users)
+        metric_dict = self.topk_result("novelty", result)
+        return metric_dict
+
+    def get_pop(self, item_matrix, item_count,num_users):
+        """Convert the matrix of item id to the matrix of item popularity using a dict:{id,count}.
 
         Args:
             item_matrix(numpy.ndarray): matrix of items recommended to users.
-            count_items(dict): the number of interaction of items in training data.
+            item_count(dict): the number of interaction of items in training data.
 
         Returns:
-            float: long-tail percentage.
+            numpy.ndarray: the popularity of items in the recommended list.
         """
-        if self.tail > 1:
-            tail_items = [item for item, cnt in count_items.items() if cnt <= self.tail]
-        else:
-            count_items = sorted(count_items.items(), key=lambda kv: (kv[1], kv[0]))
-            cut = max(int(len(count_items) * self.tail), 1)
-            count_items = count_items[:cut]
-            tail_items = [item for item, cnt in count_items]
         value = np.zeros_like(item_matrix)
         for i in range(item_matrix.shape[0]):
             row = item_matrix[i, :]
             for j in range(row.shape[0]):
-                value[i][j] = 1 if row[j] in tail_items else 0
+                value[i][j] = item_count.get(row[j], 0)/num_users
         return value
 
-    def calculate_metric(self, dataobject):
-        item_matrix, count_items = self.used_info(dataobject)
-        result = self.metric_info(self.get_tail(item_matrix, count_items))
-        metric_dict = self.topk_result("tailpercentage", result)
-        return metric_dict
-
-    def metric_info(self, values):
-        return values.cumsum(axis=1) / np.arange(1, values.shape[1] + 1)
+    def metric_info(self, values,num_users):
+        return -np.log2(values)/num_users
 
     def topk_result(self, metric, value):
-        """Match the metric value to the `k` and put them in `dictionary` form.
+        """Match the metric value to the `k` and put them in `dictionary` form
 
         Args:
             metric(str): the name of calculated metric.

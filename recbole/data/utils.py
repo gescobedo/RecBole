@@ -350,6 +350,8 @@ def _create_custom_sampler(
                 alpha,
                 user_pools
             )
+    else:
+        raise NotImplementedError(f"distribution cannot be {distribution}")
     return sampler
 
 def create_samplers(config, dataset, built_datasets):
@@ -379,13 +381,13 @@ def create_samplers(config, dataset, built_datasets):
             train_neg_sample_args["distribution"],
             repeatable,
             train_neg_sample_args["alpha"],
-            config,
+            
         )
         train_sampler = base_sampler.set_phase("train") if base_sampler else None
 
-        valid_sampler = _create_custom_sampler(
+        valid_sampler = _create_sampler(
             dataset,
-            config,
+            
             built_datasets,
             valid_neg_sample_args["distribution"],
             repeatable,
@@ -393,9 +395,9 @@ def create_samplers(config, dataset, built_datasets):
         )
         valid_sampler = valid_sampler.set_phase("valid") if valid_sampler else None
 
-        test_sampler = _create_custom_sampler(
+        test_sampler = _create_sampler(
             dataset,
-            config,
+           
             built_datasets,
             test_neg_sample_args["distribution"],
             repeatable,
@@ -404,7 +406,7 @@ def create_samplers(config, dataset, built_datasets):
         test_sampler = test_sampler.set_phase("test") if test_sampler else None
         
     else :
-        base_sampler = _create_custom_sampler(
+        base_sampler = _create_sampler(
             dataset,
             built_datasets,
             train_neg_sample_args["distribution"],
