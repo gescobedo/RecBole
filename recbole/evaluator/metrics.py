@@ -28,7 +28,7 @@ import numpy as np
 from collections import Counter
 from sklearn.metrics import auc as sk_auc
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-
+import pandas as pd
 from recbole.evaluator.utils import _binary_clf_curve
 from recbole.evaluator.base_metric import AbstractMetric, TopkMetric, LossMetric
 from recbole.utils import EvaluatorType
@@ -775,7 +775,7 @@ class Novelty(AbstractMetric):
     """
     metric_type = EvaluatorType.RANKING
     smaller = True
-    metric_need = ["rec.items", "data.count_items"]
+    metric_need = ["rec.items", "data.count_items","data.num_users"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -794,6 +794,18 @@ class Novelty(AbstractMetric):
         metric_dict = self.topk_result("novelty", result)
         return metric_dict
 
+    def generate_pop_groups(self, item_count,num_users):
+        user_counts= pd.DataFrame([[k,v] for k,v in item_count.items()],columns=['item','count'])
+        user_counts.sort_values(by='count',ascending=False,inplace=True)
+        user_counts['rel_user'] = user_counts['count']/num_users
+        user_counts['rel_att'] = (user_counts['rel_user']/user_counts['rel_user'].sum()).cumsum()
+        user_counts.loc[ user_counts['rel_att']<=0.2,'pop']=3  #high
+        user_counts.loc[ user_counts['rel_att']>0.2,'pop']=2   #mid
+        user_counts.loc[ user_counts['rel_att']>0.8,'pop']=1   #low
+        user_counts.set_index('item',inplace=True)
+        pop_scores=user_counts['pop'].to_dict()
+        rel_attention= user_counts['rel_user'].to_dict()
+        return pop_scores ,rel_attention
     def get_pop(self, item_matrix, item_count,num_users):
         """Convert the matrix of item id to the matrix of item popularity using a dict:{id,count}.
 
@@ -805,10 +817,12 @@ class Novelty(AbstractMetric):
             numpy.ndarray: the popularity of items in the recommended list.
         """
         value = np.zeros_like(item_matrix)
+        pop_scores, rel_attention = self.generate_pop_groups(item_count, num_users)
+
         for i in range(item_matrix.shape[0]):
             row = item_matrix[i, :]
             for j in range(row.shape[0]):
-                value[i][j] = item_count.get(row[j], 0)/num_users
+                value[i][j] = rel_attention.get(row[j])
         return value
 
     def metric_info(self, values,num_users):
