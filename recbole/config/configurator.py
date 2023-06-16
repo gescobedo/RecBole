@@ -562,6 +562,8 @@ class Config(object):
                 "distribution": "popularity",
                 "sample_num": sample_num,
             }
+        elif eval_mode[0:3] == "ucd":
+            eval_neg_sample_args = {"distribution": "user_custom", "sample_num": sample_num}
         else:
             raise ValueError(f"the mode [{eval_mode}] in eval_args is not supported.")
         self.final_config_dict[f"{phase}_neg_sample_args"] = eval_neg_sample_args

@@ -107,7 +107,7 @@ class AbstractSampler(object):
         """
 
         keys = list(self.prob.keys())
-        random_index_list = np.random.randint(0, len(keys), sample_num)
+        random_index_list = np.random.randint(0, len(keys), sample_num,)
         random_prob_list = np.random.random(sample_num)
         final_random_list = []
 
@@ -333,14 +333,13 @@ class UserDiscoverySampler(AbstractSampler):
         
         self.uid_field = datasets[0].uid_field
         self.iid_field = datasets[0].iid_field
-
         self.user_num = datasets[0].user_num
         self.item_num = datasets[0].item_num
         self.user_feat = datasets[0].user_feat
         self.user_neg_samples = None
         self.user_pools=user_pools
         super().__init__(distribution=distribution, alpha=alpha)
-
+        print("Using Discovery sample")
     def _get_candidates_list(self):
         candidates_list = []
         for dataset in self.datasets:
@@ -374,10 +373,10 @@ class UserDiscoverySampler(AbstractSampler):
         if (key_ids == key_ids[0]).all():
             key_id = key_ids[0]
             used = np.array(list(self.used_ids[key_id]))
-            value_ids = self.sampling(total_num)
+            value_ids = self.sampling_same_user(total_num,key_id)
             check_list = np.arange(total_num)[np.isin(value_ids, used)]
             while len(check_list) > 0:
-                value_ids[check_list] = value = self.sampling(len(check_list))
+                value_ids[check_list] = value = self.sampling_same_user(len(check_list),key_id)
                 mask = np.isin(value, used)
                 check_list = check_list[mask]
         else:
@@ -385,7 +384,7 @@ class UserDiscoverySampler(AbstractSampler):
             check_list = np.arange(total_num)
             key_ids = np.tile(key_ids, num)
             while len(check_list) > 0:
-                value_ids[check_list] = self.sampling(len(check_list))
+                value_ids[check_list] = self.sampling(len(check_list),key_ids[check_list])
                 check_list = np.array(
                     [
                         i
@@ -399,6 +398,37 @@ class UserDiscoverySampler(AbstractSampler):
                 )
         return torch.tensor(value_ids, dtype=torch.long)
     
+    def sampling_same_user_old(self, total_num,key_id):
+        population = np.arange(self.item_num)
+        result= self.user_sequential_sample[key_id][:total_num]
+        self.user_sequential_sample[key_id]=self.user_sequential_sample[key_id][total_num:]
+        return result
+
+    def sampling_same_user(self, total_num,key_id):
+        pool= self.user_neg_samples.get(key_id,np.arange(1,self.item_num))
+        size= len(pool) 
+        return pool[np.random.randint(  size, size=total_num)]
+
+    def sampling_old(self, sample_num,key_ids):
+        result = np.zeros(sample_num)
+        population = np.arange(1,self.item_num)
+        for i,key_id in enumerate(key_ids):
+            result[i] = self.user_sequential_sample[key_id][:1]
+            self.user_sequential_sample[key_id]=self.user_sequential_sample[key_id][1:]
+        return result
+
+    def sampling(self, sample_num,key_ids):
+        result = np.zeros(sample_num)
+        #population = np.arange(1,self.item_num)
+        for i,key_id in enumerate(key_ids):
+            pool= self.user_neg_samples.get(key_id,np.arange(1,self.item_num))
+            size= len(pool)
+            if size<=0:
+                pool=np.arange(1,self.item_num)
+                size= len(pool)
+            result[i] = pool[np.random.randint(size, size=1)]
+        return result  
+
     def get_used_ids(self):
         """
         Returns:
@@ -410,18 +440,36 @@ class UserDiscoverySampler(AbstractSampler):
         if self.user_neg_samples is None:
             valid_user = self.datasets[0].id2token(self.datasets[0].uid_field,list(range(self.datasets[0].user_num)))[1:]
             valid_items = self.datasets[0].id2token(self.datasets[0].iid_field,list(range(self.datasets[0].item_num)))[1:]
-
+            
             dict_valid_user ={token:id_ for token,id_ in zip(valid_user,np.arange(1,len(valid_user)))}
             dict_valid_items ={token:id_ for token,id_ in zip(valid_items,np.arange(1,len(valid_items)))}
             
        
             user_neg_samples_feat ={
-                self.datasets[0].token2id(self.datasets[0].uid_field,user_id):row for user_id, row in self.user_pools.items() if dict_valid_user.get(user_id)!=None}
+                self.datasets[0].token2id(self.datasets[0].uid_field,str(user_id)):row.split(" ") for user_id, row in self.user_pools.items() if dict_valid_user.get(str(user_id),None)!=None}
 
-            self.user_neg_samples = {k:list(self.datasets[0].token2id(self.datasets[0].iid_field, 
-                                                [y for y in v if dict_valid_items.get(y)!=None])) 
-                                                for k,v in user_neg_samples_feat.items()}
-            
+            self.user_neg_samples = {k:np.array(self.datasets[0].token2id(self.datasets[0].iid_field, 
+                                                [y for y in v if dict_valid_items.get(y,None)!=None])) 
+                                                for k,v in user_neg_samples_feat.items() if len(v)>0}
+            print(len(valid_user))
+            print(len(valid_items))
+            print(len(user_neg_samples_feat.keys()))
+            print(type(self.user_neg_samples[2][0]))
+            print(len(self.user_neg_samples.keys()))
+            print(len(self.user_pools.keys()))
+            import pandas as pd
+            negs= pd.Series([len(v) for k,v in self.user_neg_samples.items()if len(v)>1])
+            print(negs.describe())
+        self.user_pweights={k:[] for k in range(self.user_num)}
+        for user in range(self.user_num):
+            weights = np.ones(self.item_num)
+            user_csutom_negatives = self.user_neg_samples.get(user,[])
+            if len(user_csutom_negatives)>0:
+                weights[user_csutom_negatives]=1+self.alpha
+            self.user_pweights[user]=weights[1:]/(weights[1:].sum())
+        population = np.arange(1,self.item_num)
+        #self.user_sequential_sample = {user:np.random.choice(population,size=10_000,p=weights) for user,weights in self.user_pweights.items()}
+        
         used_item_id = dict()
         last = [set() for _ in range(self.user_num)]
         for phase, dataset in zip(self.phases, self.datasets):
