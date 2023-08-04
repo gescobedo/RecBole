@@ -342,13 +342,14 @@ def _create_custom_sampler(
     if distribution == "user_custom":
             user_pools_url = os.path.join(config["data_path"],f'{config["dataset"]}.user_pool')
             user_pools = pickle.load(open(user_pools_url,mode='rb'))
-
+            mode = config['train_neg_sample_args']['mode_sampler'] 
             sampler = UserDiscoverySampler(
                 phases,
                 built_datasets,
                 distribution,
                 alpha,
-                user_pools
+                user_pools,
+                mode
             )
     else:
         raise NotImplementedError(f"distribution cannot be {distribution}")
