@@ -109,6 +109,7 @@ def run_recbole(
         "valid_score_bigger": config["valid_metric_bigger"],
         "best_valid_result": best_valid_result,
         "test_result": test_result,
+        "model_file": trainer.saved_model_file
     }
 
 
