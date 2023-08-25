@@ -340,7 +340,7 @@ def _create_custom_sampler(
     phases = ["train", "valid", "test"]
     sampler = None 
     if distribution == "user_custom":
-            user_pools_url = os.path.join(config["data_path"],f'{config["dataset"]}.user_pool')
+            user_pools_url = os.path.join(config["data_path"],f'{config["dataset"]}.{config["train_neg_sample_args"]["user_pool"]}_pool')
             user_pools = pickle.load(open(user_pools_url,mode='rb'))
 
             sampler = UserDiscoverySampler(

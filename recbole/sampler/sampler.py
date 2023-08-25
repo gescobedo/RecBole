@@ -340,6 +340,7 @@ class UserDiscoverySampler(AbstractSampler):
         self.user_pools=user_pools
         super().__init__(distribution=distribution, alpha=alpha)
         print("Using Discovery sample")
+        print(self.__class__.__name__)
     def _get_candidates_list(self):
         candidates_list = []
         for dataset in self.datasets:
@@ -446,7 +447,7 @@ class UserDiscoverySampler(AbstractSampler):
             
        
             user_neg_samples_feat ={
-                self.datasets[0].token2id(self.datasets[0].uid_field,str(user_id)):row.split(" ") for user_id, row in self.user_pools.items() if dict_valid_user.get(str(user_id),None)!=None}
+                self.datasets[0].token2id(self.datasets[0].uid_field,str(user_id)):[str(x)for x in row] for user_id, row in self.user_pools.items() if dict_valid_user.get(str(user_id),False)}
 
             self.user_neg_samples = {k:np.array(self.datasets[0].token2id(self.datasets[0].iid_field, 
                                                 [y for y in v if dict_valid_items.get(y,None)!=None])) 
