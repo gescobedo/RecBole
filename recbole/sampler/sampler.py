@@ -340,6 +340,7 @@ class UserDiscoverySampler(AbstractSampler):
         self.user_pools=user_pools
         self.min_prob = min_prob
         self.mode= mode
+        self.default_pool =np.arange(1,self.item_num)
         super().__init__(distribution=distribution, alpha=alpha)
         print("Using Discovery sample")
         print(self.__class__.__name__)
@@ -424,12 +425,8 @@ class UserDiscoverySampler(AbstractSampler):
         result = np.zeros(sample_num)
         #population = np.arange(1,self.item_num)
         for i,key_id in enumerate(key_ids):
-            pool= self.user_neg_samples.get(key_id,np.arange(1,self.item_num))
-            size= len(pool)
-            if size<=0:
-                pool=np.arange(1,self.item_num)
-                size= len(pool)
-            result[i] = pool[np.random.randint(size, size=1)]
+            pool= self.user_neg_samples.get(key_id,self.default_pool)
+            result[i] = np.random.choice(pool,size=1)
         return result
       
     def random_completion(self,):

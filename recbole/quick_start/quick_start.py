@@ -39,6 +39,12 @@ from recbole.utils import (
 )
 
 
+def run_recbole_conf(rank, *args):
+  
+    return run_recbole(
+        *args,
+    ) 
+
 def run_recbole(
     model=None, dataset=None, config_file_list=None, config_dict=None, saved=True
 ):
